@@ -22,7 +22,7 @@ from functions import ScannerController
 
 
 def load_app_icon() -> QIcon:
-    icon_path = Path(__file__).resolve().parent / "assets" / "pararelly.svg"
+    icon_path = Path(__file__).resolve().parent / "Assets" / "parallely.svg"
     renderer = QSvgRenderer(str(icon_path))
     pixmap = QPixmap(256, 256)
     pixmap.fill(Qt.GlobalColor.transparent)

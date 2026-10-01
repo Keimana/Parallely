@@ -1,6 +1,8 @@
 import os
 import threading
 import time
+from collections import deque
+from collections.abc import Iterator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from PySide6.QtCore import QObject, Signal
@@ -14,6 +16,26 @@ class ScanSignals(QObject):
     match = Signal(str, int, int, str, str)
     skipped = Signal(str, str)
     finished = Signal(int, int, float, bool)
+
+
+def iter_candidate_files(folder: str, extension: str, cancel_event: threading.Event) -> Iterator[str]:
+    directories = deque([folder])
+    while directories and not cancel_event.is_set():
+        current_directory = directories.popleft()
+        try:
+            with os.scandir(current_directory) as entries:
+                for entry in entries:
+                    if cancel_event.is_set():
+                        return
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            directories.append(entry.path)
+                        elif entry.is_file() and (not extension or entry.name.casefold().endswith(extension)):
+                            yield entry.path
+                    except OSError:
+                        continue
+        except OSError:
+            continue
 
 
 def scan_batch(
@@ -77,45 +99,46 @@ def scan_folder(
     scanned = 0
     matches = 0
     extension = normalize_extension(extension)
-    if file_paths is None:
-        matching_files = []
-        for root, _, names in os.walk(folder, onerror=lambda _error: None):
-            if cancel_event.is_set():
-                break
-            matching_files.extend(
-                os.path.join(root, name)
-                for name in names
-                if not extension or name.casefold().endswith(extension)
-            )
-    else:
-        matching_files = list(file_paths)
-
-    signals.discovered.emit(len(matching_files))
-    signals.progress.emit(0, 0)
-    batch_size = max(1, min(16, (len(matching_files) + worker_count * 4 - 1) // (worker_count * 4)))
+    candidate_files = iter(file_paths) if file_paths is not None else iter_candidate_files(folder, extension, cancel_event)
+    discovered = 0
+    exhausted = False
+    batch_size = 16
+    pending_limit = worker_count * 2
     pending: dict[Future, list[str]] = {}
     pool = ThreadPoolExecutor(max_workers=worker_count)
-    next_file = 0
+    signals.discovered.emit(discovered)
+    signals.progress.emit(0, 0)
     try:
-        while pending or next_file < len(matching_files):
+        while pending or not exhausted:
             while (
                 not cancel_event.is_set()
-                and next_file < len(matching_files)
-                and len(pending) < worker_count * 2
+                and not exhausted
+                and len(pending) < pending_limit
             ):
-                batch = matching_files[next_file:next_file + batch_size]
-                next_file += len(batch)
-                pending[pool.submit(
-                    scan_batch,
-                    batch,
-                    keyword,
-                    case_sensitive,
-                    cancel_event,
-                    whole_word,
-                )] = batch
+                batch = []
+                for _ in range(batch_size):
+                    if cancel_event.is_set():
+                        break
+                    try:
+                        batch.append(next(candidate_files))
+                    except StopIteration:
+                        exhausted = True
+                        break
+
+                if batch:
+                    discovered += len(batch)
+                    signals.discovered.emit(discovered)
+                    pending[pool.submit(
+                        scan_batch,
+                        batch,
+                        keyword,
+                        case_sensitive,
+                        cancel_event,
+                        whole_word,
+                    )] = batch
 
             if cancel_event.is_set():
-                next_file = len(matching_files)
+                exhausted = True
             if not pending:
                 break
 

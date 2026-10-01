@@ -183,8 +183,9 @@ class ScannerController:
 
     def on_discovered(self, discovered: int):
         self.discovered_count = discovered
-        self.window.progress_bar.setRange(0, max(1, discovered))
-        self.window.progress_bar.setValue(0)
+        maximum = max(1, discovered)
+        self.window.progress_bar.setRange(0, maximum)
+        self.window.progress_bar.setValue(min(self.scanned_count, maximum))
         self.update_status()
 
     def on_progress(self, scanned: int, matches: int):
