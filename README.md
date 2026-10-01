@@ -23,14 +23,31 @@ The keyword is checked separately against the filename stem and each line of fil
 - Otherwise, Python's `str.count()` counts literal, non-overlapping occurrences.
 - The preview shows a short excerpt around the first matching content occurrence. Filename-only matches have no content preview.
 
-## Algorithms and Concurrency
+## Search Algorithm and Concurrency
 
-- `os.walk()` traverses the selected folder tree and discovers candidate files. An extension suffix filter is applied during discovery unless **Include all file types** is selected.
-- The scanner checks each filename stem, then reads text content line by line as UTF-8. Invalid UTF-8 bytes are ignored. A null byte in the first 8 KB is used as a basic binary-file check; detected binary files are skipped for content search.
-- Candidate paths are divided into batches and processed by `concurrent.futures.ThreadPoolExecutor`. Batch size scales with the number of files and workers, with a maximum of 16 files per batch and at most two outstanding batches per worker.
-- A `threading.Event` provides cooperative cancellation during folder traversal, between files, and between text lines. Qt signals send progress and results back to the interface.
+**Algorithm type:** exhaustive (linear) file traversal with literal string matching, also commonly called brute-force search. The scanner checks every candidate file; it does not prune candidates using branch-and-bound, and it does not use binary search because files and keywords are not stored in a sorted index. The binary-file check described below is only a way to avoid decoding likely binary data; it is unrelated to binary search.
 
-This is literal text searching, not OCR or semantic search. The current scanner does not extract text from PDF or office-document formats.
+### Search Steps
+
+1. The producer initializes a FIFO `collections.deque` with the selected folder. It removes directories from the front and uses `os.scandir()` to inspect entries, appending child directories to the back. This is breadth-first search (BFS): directories are visited level by level.
+2. Each discovered file is checked against the extension filter. Matching paths are accumulated into batches of up to 16 and submitted as soon as a batch is ready; the full candidate-file list is never built in advance.
+3. A worker counts keyword occurrences in the filename stem (the name without its extension), then reads text from beginning to end, one UTF-8 line at a time. Invalid UTF-8 bytes are ignored; a null byte in the first 8 KB marks a file as binary and skips content search.
+4. In regular mode, Python's `str.count()` finds literal, non-overlapping occurrences. In whole-word mode, an escaped keyword is matched with a regular expression using `(?<!\w)` and `(?!\w)` boundaries.
+5. Filename and content counts are added. The scanner records the first matching content line for the preview and reports the source of each match.
+
+This is exhaustive search: every eligible file is visited, even after a match is found, because the app reports occurrence counts. It is not branch-and-bound because there is no pruning, and it is not binary search because there is no sorted index to search. The binary-file check is unrelated to binary search.
+
+For `E` directory entries inspected and `C` bytes of candidate text content read, work grows approximately with `E + C`. The directory queue stores the current BFS frontier; file batches and their results are bounded by the in-flight batch limit. Results shown in the UI remain in memory for the duration of the session.
+
+### Concurrent Processing
+
+- **Producer:** the scan coordinator performs BFS directory discovery and streams each batch of up to 16 matching file paths into the pool.
+- **Thread-pool consumers:** `ThreadPoolExecutor` runs up to `W` batch workers concurrently, where `W` is the configured worker count. Each worker scans its own batch and returns per-file results; workers do not share matching state.
+- **Backpressure:** the coordinator keeps at most `2 * W` batch futures in flight. When that limit is reached, it waits instead of discovering and queuing an unbounded number of files.
+- **Result consumer:** the coordinator waits for the first completed future, collects its results, updates counts, and emits progress and matches to the UI through Qt signals. Discovery totals are emitted incrementally as batches are submitted.
+- A shared `threading.Event` provides cooperative cancellation during directory traversal and between files or text lines. Cancellation does not instantly interrupt a file read already in progress.
+
+The thread pool overlaps file I/O; it does not change the exhaustive search algorithm or guarantee a speedup, since disk performance and worker count affect elapsed time. This is literal text searching, not OCR or semantic search. The current scanner does not extract text from PDF or office-document formats.
 
 ## File Types and Roadmap
 
