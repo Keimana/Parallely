@@ -1,0 +1,46 @@
+PARALLELLY FILE SCANNER
+TECHNOLOGY AND ALGORITHM
+========================
+
+TECHNOLOGY
+----------
+- Python 3.13: application and scan logic.
+- PySide6 / Qt: desktop window, controls, results tables, FAQ dialog, and UI signals.
+- os.walk(): recursive folder traversal and extension filtering.
+- concurrent.futures.ThreadPoolExecutor: concurrent processing of file batches.
+- threading.Event: cooperative cancellation of scans.
+- re: escaped regular expressions for whole-word matching.
+- UTF-8 text streams: files are read one line at a time with errors ignored.
+- No database is used. Scanning happens locally; results are kept in the running app and are not saved to a database.
+
+SCAN FLOW
+---------
+1. The app recursively discovers files with os.walk(). The extension filter is applied during discovery; the all-file-types option disables that filter.
+2. Each candidate's filename stem (the filename without its extension) is checked against the keyword.
+3. The scanner checks text contents line by line. It first checks for a null byte in the first 8 KB; files detected as binary are not decoded as text. A binary file can still be a result if its filename matches.
+4. Readable text is decoded as UTF-8 with invalid bytes ignored. Read and permission errors are reported in the Skipped tab.
+5. Results are sent to the UI with the combined filename/content occurrence count, match source, file size, and a short preview from the first matching content line.
+
+KEYWORD MATCHING
+----------------
+- Case-sensitive mode compares exact capitalization. Otherwise, the keyword and text are case-folded.
+- Whole-word mode uses an escaped keyword in a regular expression with word-boundary lookarounds: (?<!\\w)KEYWORD(?!\\w). This prevents a short keyword from matching inside a longer word.
+- When whole-word mode is off, Python's str.count() finds literal, non-overlapping occurrences.
+- Matching is performed independently on each filename stem and each text line. A content match cannot span two lines.
+- The Match preview shows context around the first matching content occurrence. Filename-only matches have no content preview.
+- A blank keyword returns every readable text file in scope; binary files without a filename match remain skipped because the scanner must identify them as binary.
+
+CONCURRENCY AND TIMING
+----------------------
+- Candidate paths are divided into batches. Batch size is based on the candidate count and worker count, and is capped at 16 files.
+- ThreadPoolExecutor runs batches concurrently, with at most two queued batches per worker.
+- The GUI remains responsive because folder discovery and coordination run outside the UI thread; workers read and match file data.
+- Cancellation is checked during traversal and between files/lines.
+- Elapsed time is measured with time.perf_counter() from the start of discovery through worker shutdown. It is real elapsed time, not a complexity estimate. Disk speed, file sizes, system load, and file caching affect it.
+
+RUNNING THE APP
+---------------
+Install dependencies and launch from the project folder:
+
+    python -m pip install -r requirements.txt
+    python main.py
