@@ -101,7 +101,7 @@ class ScannerController:
             </ol>
             <h2>What gets matched?</h2>
             <p>The keyword is searched inside every readable text file in the selected scope, even when the keyword is not in the filename. It is also checked against the filename without its extension. The <b>Matched in</b> column tells you which one matched; <b>Match preview</b> shows a short excerpt from the first matching content line. Case-sensitive matching requires the same capitalization; whole-word matching avoids matches inside longer words.</p>
-            <p>Text content is read as UTF-8. Binary files such as PNGs and MP4s are skipped unless their filename matches the keyword. This app does not perform OCR or extract text from media.</p>
+            <p>Text content is read as UTF-8 by default; UTF-8 BOMs and BOM-marked UTF-16/UTF-32 files are also supported. Files with invalid text encoding and binary files such as PNGs and MP4s are skipped unless their filename matches the keyword. This app does not perform OCR or extract text from media.</p>
             <h2>Results and skipped files</h2>
             <p>Double-click a result to open it. Right-click it and choose <b>Open in File Explorer</b> to reveal the file in its folder. The <b>Skipped</b> tab lists files that could not be searched and why. Use <b>Retry Skipped</b> after resolving access problems.</p>
             <p><b>Clear Results</b> removes both results and skipped entries. A blank keyword returns every file in the selected scope that can be read as text, plus any filename matches.</p>

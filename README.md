@@ -31,7 +31,7 @@ The keyword is checked separately against the filename stem and each line of fil
 
 1. The producer initializes a FIFO `collections.deque` with the selected folder. It removes directories from the front and uses `os.scandir()` to inspect entries, appending child directories to the back. This is breadth-first search (BFS): directories are visited level by level.
 2. Each discovered file is checked against the extension filter. Matching paths are accumulated into batches of up to 16 and submitted as soon as a batch is ready; the full candidate-file list is never built in advance.
-3. A worker counts keyword occurrences in the filename stem (the name without its extension), then reads text from beginning to end, one UTF-8 line at a time. Invalid UTF-8 bytes are ignored; a null byte in the first 8 KB marks a file as binary and skips content search.
+3. A worker counts keyword occurrences in the filename stem (the name without its extension), then reads text from beginning to end, one line at a time. UTF-8 is used by default; UTF-8 BOMs and BOM-marked UTF-16/UTF-32 files are also supported. Invalid text encoding is reported as a skipped-file error rather than silently ignored. Without a recognized Unicode BOM, a null byte in the first 8 KB marks a file as binary and skips content search.
 4. In regular mode, Python's `str.count()` finds literal, non-overlapping occurrences. In whole-word mode, an escaped keyword is matched with a regular expression using `(?<!\w)` and `(?!\w)` boundaries.
 5. Filename and content counts are added. The scanner records the first matching content line for the preview and reports the source of each match.
 
@@ -51,7 +51,7 @@ The thread pool overlaps file I/O; it does not change the exhaustive search algo
 
 ## File Types and Roadmap
 
-The current extension field is generic: you can enter one suffix or choose **Include all file types**. Content search reads files as UTF-8 text and skips files detected as binary. There are no format-specific parsers yet, so entering an extension does not guarantee that its file contents can be searched.
+The current extension field is generic: you can enter one suffix or choose **Include all file types**. Content search reads UTF-8 text, UTF-8 BOM-marked text, and BOM-marked UTF-16/UTF-32 text; files detected as binary or containing invalid text encoding are skipped. There are no format-specific parsers yet, so entering an extension does not guarantee that its file contents can be searched.
 
 The next update is planned to add explicit support for:
 
