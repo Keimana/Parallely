@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -21,8 +22,18 @@ from PySide6.QtWidgets import (
 from functions import ScannerController
 
 
+def _resource_path(*parts: str) -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).resolve().parent
+    return base_path.joinpath(*parts)
+
+
 def load_app_icon() -> QIcon:
-    icon_path = Path(__file__).resolve().parent / "Assets" / "parallely.svg"
+    icon_path = _resource_path("Assets", "parallely.svg")
+    if not icon_path.exists():
+        icon_path = _resource_path("parallely.svg")
     renderer = QSvgRenderer(str(icon_path))
     pixmap = QPixmap(256, 256)
     pixmap.fill(Qt.GlobalColor.transparent)

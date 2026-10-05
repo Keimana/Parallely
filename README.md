@@ -71,3 +71,12 @@ Scans run locally against the folder you select. Parallely does not upload or sa
 python -m pip install -r requirements.txt
 python main.py
 ```
+
+## Build a Windows executable
+
+```powershell
+python -m pip install -r requirements.txt
+pyinstaller --noconfirm --clean --onefile --windowed --name "Parallely" --add-data "Assets;Assets" main.py
+```
+
+The executable is created in the `dist` folder, and it includes the app icon assets needed by the GUI.
